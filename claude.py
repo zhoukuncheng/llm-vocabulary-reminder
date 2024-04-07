@@ -28,7 +28,9 @@ class Claude3Wrapper:
         """
         self.client = client
 
-    def invoke_claude_3_with_text(self, sys_prompt, prompt, model_id="anthropic.claude-3-haiku-20240307-v1:0"):
+    def invoke_claude_3_with_text(
+        self, sys_prompt, prompt, model_id="anthropic.claude-3-haiku-20240307-v1:0"
+    ):
         """
         Invokes Anthropic Claude 3 Sonnet to run an inference using the input
         provided in the request body.

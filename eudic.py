@@ -10,9 +10,7 @@ from config import EUDIC_TOKEN
 client = httpx.AsyncClient(timeout=1200)
 
 url = "https://api.frdic.com/api/open/v1/studylist/words/0"
-headers = {
-    "Authorization": EUDIC_TOKEN
-}
+headers = {"Authorization": EUDIC_TOKEN}
 
 
 @alru_cache(ttl=3600 * 2)
@@ -29,10 +27,13 @@ async def list_eudic_glossary(page, page_size=50):
         return ""
 
 
-def format_glossary(glossary: list[dict]):
+def format_glossary(glossary: list[dict[str]]):
+    for w in glossary:
+        if w.get("exp"):
+            w["exp"] = w["exp"].replace("<br>", "\n")
     logging.debug(pprint.pformat(glossary))
     return [w["word"] for w in glossary]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(list_eudic_glossary(page=44))

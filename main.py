@@ -11,21 +11,24 @@ import datetime
 import logging
 import random
 import traceback
+from urllib.parse import quote
 
 import mistune
 import pytz
 import telegram
+import telegramify_markdown
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from article import write
 from claude import claude_wrapper
-from config import sys_message, ALLOWED_USER_IDS, TG_BOT_TOKEN
+from config import ALLOWED_USER_IDS, TG_BOT_TOKEN, sys_message
 from eudic import list_eudic_glossary, format_glossary
 
 # Enable logging
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s", level=logging.DEBUG
+    format="%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
+    level=logging.DEBUG,
 )
 
 
@@ -34,42 +37,62 @@ async def daily_message(context: telegram.ext.CallbackContext) -> None:
     loop = asyncio.get_event_loop()
     job = context.job
     logging.info(context.job)
-    # page_size = 12
-    # end = 6500 // page_size
+    # get glossary
     glossary = await list_eudic_glossary(0, 0)
-    if glossary:
-        choice = random.choices(glossary, k=12)
-        words = format_glossary(choice)
+    if not glossary:
+        await context.bot.send_message(job.chat_id, f"not glossary")
+        return
 
-        llm_response = await loop.run_in_executor(None, claude_wrapper.invoke_claude_3_with_text, sys_message,
-                                                  f"explain: \n{words}")
-        logging.debug(llm_response)
-        article = await write(mistune.create_markdown(
-            escape=False,
-            hard_wrap=True,
-            plugins=['strikethrough', 'footnotes', 'table', 'speedup']
-        )(llm_response, ))
-        try:
-            lines = "\n".join([f"{w.get("word")} - {w.get("exp")}" for w in choice])
-            await context.bot.send_message(job.chat_id,
-                                           f"""
-Words:
-{lines}
+    # choose words
+    choice = random.choices(glossary, k=13)
+    words = format_glossary(choice)
+    # send words
+    try:
+        for w in choice:
+            l = f"""
+{w.get("word")}
+{w.get("exp")}
+
+[Audio](https://dict.youdao.com/dictvoice?audio={quote(w.get('word'))}&type=2)
 
 
-Explain:
-{article}
+[{w.get('word')} YouDao Page](https://dict.youdao.com/m/result?word={quote(w.get('word'))}&lang=en)
 
 """
-                                           )
-        except Exception as e:
-            logging.exception(e)
-            await context.bot.send_message(job.chat_id, f"send markdown message failed:{e}, {traceback.format_exc()}")
+            await context.bot.send_message(
+                job.chat_id, telegramify_markdown.convert(l), parse_mode="MarkdownV2"
+            )
+    except Exception as e:
+        logging.exception(e)
+        await context.bot.send_message(
+            job.chat_id, f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}"
+        )
 
-
-    else:
-        await context.bot.send_message(job.chat_id,
-                                       text=f"Beep! {job.name} {job.data} failed! \n {traceback.format_exc()}")
+    # llm generation
+    llm_response = await loop.run_in_executor(
+        None,
+        claude_wrapper.invoke_claude_3_with_text,
+        sys_message,
+        f"explain: \n{words}",
+    )
+    logging.debug(llm_response)
+    # send telegraph
+    try:
+        article_url = await write(
+            mistune.create_markdown(
+                escape=False,
+                hard_wrap=True,
+                plugins=["strikethrough", "footnotes", "table", "speedup"],
+            )(
+                llm_response,
+            )
+        )
+        await context.bot.send_message(job.chat_id, article_url)
+    except Exception as e:
+        logging.exception(e)
+        await context.bot.send_message(
+            job.chat_id, f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}"
+        )
 
 
 async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -77,7 +100,9 @@ async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if update.message.from_user.id not in ALLOWED_USER_IDS:
         logging.error(f"banned: {update.message.from_user}")
-        await update.effective_message.reply_text(f"not allowed: {update.message.from_user}")
+        await update.effective_message.reply_text(
+            f"not allowed: {update.message.from_user}"
+        )
         return
     try:
         for job in context.job_queue.jobs():
@@ -85,18 +110,22 @@ async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logging.error(f"remove all jobs failed: {e}")
     try:
-        context.job_queue.run_once(daily_message,
-                                   datetime.datetime.now(tz=pytz.timezone('Asia/Shanghai')) + datetime.timedelta(
-                                       seconds=1),
-                                   name="once1",
-                                   chat_id=update.message.chat_id)
+        context.job_queue.run_once(
+            daily_message,
+            datetime.datetime.now(tz=pytz.timezone("Asia/Shanghai"))
+            + datetime.timedelta(seconds=1),
+            name="once1",
+            chat_id=update.message.chat_id,
+        )
 
         times = [(x, random.randint(10, 20)) for x in range(8, 23)]
-        for (h, m) in times:
-            context.job_queue.run_daily(daily_message,
-                                        datetime.time(hour=h, minute=m, tzinfo=pytz.timezone('Asia/Shanghai')),
-                                        name=f"{h}:{m} job",
-                                        chat_id=update.message.chat_id)
+        for h, m in times:
+            context.job_queue.run_daily(
+                daily_message,
+                datetime.time(hour=h, minute=m, tzinfo=pytz.timezone("Asia/Shanghai")),
+                name=f"{h}:{m} job",
+                chat_id=update.message.chat_id,
+            )
 
         text = "Timer successfully set!"
         await update.effective_message.reply_text(text)
@@ -106,6 +135,32 @@ async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text(str(e))
 
 
+# Define the function to handle the /audio command
+async def get_audio_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        word = context.args[0]
+        audio_url = f"https://dict.youdao.com/dictvoice?audio={quote(word)}&type=2"
+        await update.effective_message.reply_text(audio_url)
+    except (IndexError, ValueError) as e:
+        logging.error(e)
+        await update.effective_message.reply_text(
+            "Please use the /audio command followed by a word."
+        )
+
+
+# Define the function to handle the /audio command
+async def get_web_definition_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        word = context.args[0]
+        page_url = f"https://dict.youdao.com/m/result?word={quote(word)}&lang=en"
+        await update.effective_message.reply_text(page_url)
+    except (IndexError, ValueError) as e:
+        logging.error(e)
+        await update.effective_message.reply_text(
+            "Please use the /page command followed by a word."
+        )
+
+
 def main() -> None:
     """Run bot."""
     # Create the Application and pass it your bot's token.
@@ -113,6 +168,8 @@ def main() -> None:
 
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("set", set_timer))
+    application.add_handler(CommandHandler("audio", get_audio_url))
+    application.add_handler(CommandHandler("page", get_web_definition_url))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling(allowed_updates=Update.ALL_TYPES)
