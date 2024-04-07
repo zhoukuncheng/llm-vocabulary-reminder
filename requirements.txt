@@ -1,0 +1,9 @@
+httpx
+pytz
+boto3
+async-lru
+telegramify_markdown
+python-telegram-bot[job-queue]
+BeautifulSoup4
+telegraph[aio]
+mistune
