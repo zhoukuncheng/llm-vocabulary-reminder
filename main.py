@@ -9,6 +9,7 @@ Simple Bot to send timed Telegram messages.
 import asyncio
 import datetime
 import logging
+import os
 import random
 import traceback
 from urllib.parse import quote
@@ -20,10 +21,12 @@ import telegramify_markdown
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from article import write
+from article import write_to_telegraph, markdown_to_text
 from claude import claude_wrapper
-from config import ALLOWED_USER_IDS, TG_BOT_TOKEN, sys_message
+from config import ALLOWED_USER_IDS, TG_BOT_TOKEN, sys_message_writer, CHOSEN_WORDS_SIZE
 from eudic import list_eudic_glossary, format_glossary
+from groq_llm import gen_chat_completion
+from tts import gen_tts_audio
 
 # Enable logging
 logging.basicConfig(
@@ -44,19 +47,42 @@ async def daily_message(context: telegram.ext.CallbackContext) -> None:
         return
 
     # choose words
-    choice = random.choices(glossary, k=13)
+    k = CHOSEN_WORDS_SIZE
+
+    choice = random.choices(glossary, k=k)
     words = format_glossary(choice)
     # send words
     try:
-        for w in choice:
+        for i, w in enumerate(choice, 1):
+            word = w.get("word", "").strip()
             l = f"""
-{w.get("word")}
+**{i}. {word}**
 {w.get("exp")}
 
-[Audio](https://dict.youdao.com/dictvoice?audio={quote(w.get('word'))}&type=2)
+[🇺🇸 MAmE](https://dict.youdao.com/dictvoice?audio={quote(word)}&type=2)
 
+[🇬🇧  BrE](https://dict.youdao.com/dictvoice?audio={quote(word)}&type=1)
 
-[{w.get('word')} YouDao Page](https://dict.youdao.com/m/result?word={quote(w.get('word'))}&lang=en)
+[EUDIC ](https://dict.eudic.net/dicts/en/{quote(word)})
+
+[You Dao ](https://dict.youdao.com/m/result?word={quote(word)}&lang=en)
+
+[Thesaurus ](https://www.thesaurus.com/browse/{quote(word)})
+
+[Google ](https://www.google.com/search?q=define:{quote(word)})
+
+[Merriam Webster ](https://www.merriam-webster.com/dictionary/{quote(word)})
+
+[Vocabulary ](https://www.vocabulary.com/dictionary/{quote(word)})
+
+[Oxford Learner's Dictionary ](https://www.oxfordlearnersdictionaries.com/definition/english/{quote(word.lower())})
+
+[Bing Dict ](https://cn.bing.com/dict/clientsearch?mkt=zh-CN&setLang=zh&form=BDVEHC&ClientVer={quote("BDDTV3.5.1.4320")}&q={quote(word)})
+
+[URBAN DICTIONARY ](https://www.urbandictionary.com/define.php?term={quote(word)})
+
+[Cambridge ](https://dictionary.cambridge.org/dictionary/english/{quote(word)})
+
 
 """
             await context.bot.send_message(
@@ -69,16 +95,21 @@ async def daily_message(context: telegram.ext.CallbackContext) -> None:
         )
 
     # llm generation
-    llm_response = await loop.run_in_executor(
-        None,
-        claude_wrapper.invoke_claude_3_with_text,
-        sys_message,
-        f"explain: \n{words}",
-    )
+    if os.getenv("USE_CLAUDE") == "1":
+        llm_response = await loop.run_in_executor(
+            None,
+            claude_wrapper.invoke_claude_3_with_text,
+            sys_message_writer,
+            f"words: \n{words}",
+        )
+    else:
+        llm_response = await gen_chat_completion(
+            sys_message_writer, f"words: \n{words}"
+        )
     logging.debug(llm_response)
     # send telegraph
     try:
-        article_url = await write(
+        article_url = await write_to_telegraph(
             mistune.create_markdown(
                 escape=False,
                 hard_wrap=True,
@@ -90,14 +121,42 @@ async def daily_message(context: telegram.ext.CallbackContext) -> None:
         await context.bot.send_message(job.chat_id, article_url)
     except Exception as e:
         logging.exception(e)
+        try:
+            article_url = await write_to_telegraph(
+                mistune.create_markdown(
+                    escape=False,
+                    hard_wrap=True,
+                    plugins=["strikethrough", "footnotes", "table", "speedup"],
+                )(
+                    telegramify_markdown.convert(llm_response),
+                )
+            )
+            await context.bot.send_message(job.chat_id, article_url)
+        except Exception as e:
+            logging.exception(e)
+            await context.bot.send_message(
+                job.chat_id,
+                f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}",
+            )
+    # gen audio file
+    try:
+        audio_filename = f"glossary-{datetime.datetime.now(datetime.UTC)}.mp3"
+        await gen_tts_audio(
+            text=markdown_to_text(llm_response), filename=audio_filename
+        )
+        await context.bot.send_audio(
+            job.chat_id, audio=audio_filename, caption=f"{", ".join(words)}"
+        )
+        os.remove(audio_filename)
+    except Exception as e:
         await context.bot.send_message(
-            job.chat_id, f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}"
+            job.chat_id,
+            f"{job.name} {job.data} audio failed!:{e}, {traceback.format_exc()}",
         )
 
 
 async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Add a job to the queue."""
-
     if update.message.from_user.id not in ALLOWED_USER_IDS:
         logging.error(f"banned: {update.message.from_user}")
         await update.effective_message.reply_text(
@@ -118,7 +177,7 @@ async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             chat_id=update.message.chat_id,
         )
 
-        times = [(x, random.randint(10, 20)) for x in range(8, 23)]
+        times = [(x, random.randint(15, 55)) for x in range(8, 23)]
         for h, m in times:
             context.job_queue.run_daily(
                 daily_message,
@@ -151,9 +210,37 @@ async def get_audio_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Define the function to handle the /audio command
 async def get_web_definition_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        word = context.args[0]
-        page_url = f"https://dict.youdao.com/m/result?word={quote(word)}&lang=en"
-        await update.effective_message.reply_text(page_url)
+        word = " ".join(context.args).strip()
+        page_urls = f"""
+**{word}**
+  
+[🇺🇸 MAmE](https://dict.youdao.com/dictvoice?audio={quote(word)}&type=2)
+
+[🇬🇧  BrE](https://dict.youdao.com/dictvoice?audio={quote(word)}&type=1)
+
+[EUDIC ](https://dict.eudic.net/dicts/en/{quote(word)})
+
+[You Dao ](https://dict.youdao.com/m/result?word={quote(word)}&lang=en)
+
+[Thesaurus ](https://www.thesaurus.com/browse/{quote(word)})
+
+[Google ](https://www.google.com/search?q=define:{quote(word)})
+
+[Merriam Webster ](https://www.merriam-webster.com/dictionary/{quote(word)})
+
+[Vocabulary ](https://www.vocabulary.com/dictionary/{quote(word)})
+
+[Oxford Learner's Dictionary ](https://www.oxfordlearnersdictionaries.com/definition/english/{quote(word.lower())})
+
+[Bing Dict ](https://cn.bing.com/dict/clientsearch?mkt=zh-CN&setLang=zh&form=BDVEHC&ClientVer={quote("BDDTV3.5.1.4320")}&q={quote(word)})
+
+[URBAN DICTIONARY ](https://www.urbandictionary.com/define.php?term={quote(word)})
+
+[Cambridge ](https://dictionary.cambridge.org/dictionary/english/{quote(word)})
+"""
+        await update.effective_message.reply_text(
+            telegramify_markdown.convert(page_urls), parse_mode="MarkdownV2"
+        )
     except (IndexError, ValueError) as e:
         logging.error(e)
         await update.effective_message.reply_text(
@@ -168,8 +255,8 @@ def main() -> None:
 
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("set", set_timer))
-    application.add_handler(CommandHandler("audio", get_audio_url))
     application.add_handler(CommandHandler("page", get_web_definition_url))
+    application.add_handler(CommandHandler("audio", get_audio_url))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling(allowed_updates=Update.ALL_TYPES)

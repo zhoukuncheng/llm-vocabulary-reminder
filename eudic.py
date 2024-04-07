@@ -24,7 +24,6 @@ async def list_eudic_glossary(page, page_size=50):
         return response.json()["data"]
     except Exception as e:
         logging.exception(e)
-        return ""
 
 
 def format_glossary(glossary: list[dict[str]]):

@@ -7,3 +7,6 @@ python-telegram-bot[job-queue]
 BeautifulSoup4
 telegraph[aio]
 mistune
+groq
+edge-tts
+markdown2
