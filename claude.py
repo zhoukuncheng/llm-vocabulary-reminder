@@ -2,10 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Purpose
-
-Shows how to use the AWS SDK for Python (Boto3) with the Amazon Bedrock Runtime client
-to run inferences using Anthropic Claude 3 models.
+Alternative LLM APIs using Claude 3 in the Amazon Bedrock Runtime.
 """
 
 import json

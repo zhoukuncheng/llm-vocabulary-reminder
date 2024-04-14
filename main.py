@@ -23,7 +23,13 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 from article import write_to_telegraph, markdown_to_text
 from claude import claude_wrapper
-from config import ALLOWED_USER_IDS, TG_BOT_TOKEN, sys_message_writer, CHOSEN_WORDS_SIZE
+from config import (
+    ALLOWED_USER_IDS,
+    TG_BOT_TOKEN,
+    sys_message_writer,
+    CHOSEN_WORDS_SIZE,
+    sys_message_explanation,
+)
 from eudic import list_eudic_glossary, format_glossary
 from groq_llm import gen_chat_completion
 from tts import gen_tts_audio
@@ -85,9 +91,22 @@ async def daily_message(context: telegram.ext.CallbackContext) -> None:
 
 
 """
-            await context.bot.send_message(
+            msg = await context.bot.send_message(
                 job.chat_id, telegramify_markdown.convert(l), parse_mode="MarkdownV2"
             )
+            if msg:
+                # llm explain
+                llm_explain = await gen_chat_completion(
+                    sys_message_explanation, f'word: "{word}"'
+                )
+                await context.bot.send_message(
+                    job.chat_id,
+                    telegramify_markdown.convert(llm_explain),
+                    parse_mode="MarkdownV2",
+                    reply_to_message_id=msg.message_id,
+                )
+            await asyncio.sleep(5)
+
     except Exception as e:
         logging.exception(e)
         await context.bot.send_message(
@@ -95,17 +114,8 @@ async def daily_message(context: telegram.ext.CallbackContext) -> None:
         )
 
     # llm generation
-    if os.getenv("USE_CLAUDE") == "1":
-        llm_response = await loop.run_in_executor(
-            None,
-            claude_wrapper.invoke_claude_3_with_text,
-            sys_message_writer,
-            f"words: \n{words}",
-        )
-    else:
-        llm_response = await gen_chat_completion(
-            sys_message_writer, f"words: \n{words}"
-        )
+    llm_response = await gen_chat_completion(sys_message_writer, f"words: \n{words}")
+
     logging.debug(llm_response)
     # send telegraph
     try:
