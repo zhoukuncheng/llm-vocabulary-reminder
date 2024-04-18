@@ -1,4 +1,4 @@
-# Glossary Reminder Bot
+# Vocabulary Reminder Bot
 
 This project is a Telegram bot designed to provide users with daily reminders containing English vocabulary words,
 definitions, and example sentences. It utilizes various APIs and libraries to generate engaging and informative content
@@ -37,7 +37,7 @@ example sentences, and links to audio pronunciations and Telegraph pages.
 ### Clone the Repository:
 
 ```bash
-git clone https://github.com/your-username/glossary-reminder-bot.git
+git clone https://github.com/zhoukuncheng/llm-vocabulary-reminder.git
 ```
 
 ### Install Dependencies:
