@@ -99,7 +99,7 @@ TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 
 EUDIC_TOKEN = os.getenv("EUDIC_TOKEN")
 
-VOICE = "en-US-AvaMultilingualNeural"
+VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-AvaMultilingualNeural")
 
 CHOSEN_WORDS_SIZE = int(os.getenv("WORDS_SIZE", "15"))
 

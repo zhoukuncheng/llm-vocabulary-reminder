@@ -22,7 +22,6 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from article import write_to_telegraph, markdown_to_text
-from claude import claude_wrapper
 from config import (
     ALLOWED_USER_IDS,
     TG_BOT_TOKEN,
@@ -61,9 +60,43 @@ async def daily_message(context: telegram.ext.CallbackContext) -> None:
     try:
         for i, w in enumerate(choice, 1):
             word = w.get("word", "").strip()
-            l = f"""
+            l = gen_word_links(i, w, word)
+            msg = await context.bot.send_message(
+                job.chat_id, telegramify_markdown.convert(l), parse_mode="MarkdownV2"
+            )
+            if msg:
+                # llm explain
+                llm_explain = await gen_chat_completion(
+                    sys_message_explanation, f'word: "{word}"'
+                )
+                await context.bot.send_message(
+                    job.chat_id,
+                    telegramify_markdown.convert(llm_explain),
+                    parse_mode="MarkdownV2",
+                    reply_to_message_id=msg.message_id,
+                )
+            await asyncio.sleep(5)
+
+    except Exception as e:
+        logging.exception(e)
+        await context.bot.send_message(
+            job.chat_id, f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}"
+        )
+
+    # llm generate article
+    llm_response = await gen_chat_completion(sys_message_writer, f"words: \n{words}")
+
+    logging.debug(llm_response)
+    # send telegraph
+    await send_telegraph(context, job, llm_response)
+    # gen audio file
+    await send_audio(context, job, llm_response, words)
+
+
+def gen_word_links(i, w, word):
+    l = f"""
 **{i}. {word}**
-{w.get("exp")}
+{w.get("exp", "")}
 
 [🇺🇸 MAmE](https://dict.youdao.com/dictvoice?audio={quote(word)}&type=2)
 
@@ -89,35 +122,11 @@ async def daily_message(context: telegram.ext.CallbackContext) -> None:
 
 [Cambridge ](https://dictionary.cambridge.org/dictionary/english/{quote(word)})
 
-
 """
-            msg = await context.bot.send_message(
-                job.chat_id, telegramify_markdown.convert(l), parse_mode="MarkdownV2"
-            )
-            if msg:
-                # llm explain
-                llm_explain = await gen_chat_completion(
-                    sys_message_explanation, f'word: "{word}"'
-                )
-                await context.bot.send_message(
-                    job.chat_id,
-                    telegramify_markdown.convert(llm_explain),
-                    parse_mode="MarkdownV2",
-                    reply_to_message_id=msg.message_id,
-                )
-            await asyncio.sleep(5)
+    return l
 
-    except Exception as e:
-        logging.exception(e)
-        await context.bot.send_message(
-            job.chat_id, f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}"
-        )
 
-    # llm generation
-    llm_response = await gen_chat_completion(sys_message_writer, f"words: \n{words}")
-
-    logging.debug(llm_response)
-    # send telegraph
+async def send_telegraph(context, job, llm_response):
     try:
         article_url = await write_to_telegraph(
             mistune.create_markdown(
@@ -148,7 +157,9 @@ async def daily_message(context: telegram.ext.CallbackContext) -> None:
                 job.chat_id,
                 f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}",
             )
-    # gen audio file
+
+
+async def send_audio(context, job, llm_response, words):
     try:
         audio_filename = f"glossary-{datetime.datetime.now(datetime.UTC)}.mp3"
         await gen_tts_audio(
@@ -207,13 +218,22 @@ async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # Define the function to handle the /audio command
 async def get_audio_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        word = context.args[0]
-        audio_url = f"https://dict.youdao.com/dictvoice?audio={quote(word)}&type=2"
+        all_words = " ".join(context.args).strip()
+        audio_url = f"https://dict.youdao.com/dictvoice?audio={quote(all_words)}&type=2"
+        audio_filename = (
+            f"audio-{datetime.datetime.now(datetime.UTC)}-{all_words[:30]}.mp3"
+        )
         await update.effective_message.reply_text(audio_url)
+        await gen_tts_audio(text=all_words, filename=audio_filename)
+        await update.effective_message.reply_audio(audio=audio_filename)
+        os.remove(audio_filename)
     except (IndexError, ValueError) as e:
-        logging.error(e)
+        logging.exception(e)
+        await update.effective_message.reply_text(f"IndexError, ValueError: {e}")
+    except Exception as e:
+        logging.exception(e)
         await update.effective_message.reply_text(
-            "Please use the /audio command followed by a word."
+            f"An error occurred. Please try again later: {e}"
         )
 
 
@@ -221,33 +241,7 @@ async def get_audio_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_web_definition_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         word = " ".join(context.args).strip()
-        page_urls = f"""
-**{word}**
-  
-[🇺🇸 MAmE](https://dict.youdao.com/dictvoice?audio={quote(word)}&type=2)
-
-[🇬🇧  BrE](https://dict.youdao.com/dictvoice?audio={quote(word)}&type=1)
-
-[EUDIC ](https://dict.eudic.net/dicts/en/{quote(word)})
-
-[You Dao ](https://dict.youdao.com/m/result?word={quote(word)}&lang=en)
-
-[Thesaurus ](https://www.thesaurus.com/browse/{quote(word)})
-
-[Google ](https://www.google.com/search?q=define:{quote(word)})
-
-[Merriam Webster ](https://www.merriam-webster.com/dictionary/{quote(word)})
-
-[Vocabulary ](https://www.vocabulary.com/dictionary/{quote(word)})
-
-[Oxford Learner's Dictionary ](https://www.oxfordlearnersdictionaries.com/definition/english/{quote(word.lower())})
-
-[Bing Dict ](https://cn.bing.com/dict/clientsearch?mkt=zh-CN&setLang=zh&form=BDVEHC&ClientVer={quote("BDDTV3.5.1.4320")}&q={quote(word)})
-
-[URBAN DICTIONARY ](https://www.urbandictionary.com/define.php?term={quote(word)})
-
-[Cambridge ](https://dictionary.cambridge.org/dictionary/english/{quote(word)})
-"""
+        page_urls = gen_word_links(0, {}, word)
         await update.effective_message.reply_text(
             telegramify_markdown.convert(page_urls), parse_mode="MarkdownV2"
         )
