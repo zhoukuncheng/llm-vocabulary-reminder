@@ -14,7 +14,7 @@ headers = {"Authorization": EUDIC_TOKEN}
 
 
 @alru_cache(ttl=3600 * 2)
-async def list_eudic_glossary(page, page_size=50):
+async def list_eudic_vocabulary(page, page_size=50):
     querystring = {"language": "en", "page": str(page), "page_size": str(page_size)}
     if page_size == 0:
         querystring = {"language": "en"}
@@ -26,13 +26,13 @@ async def list_eudic_glossary(page, page_size=50):
         logging.exception(e)
 
 
-def format_glossary(glossary: list[dict[str]]):
-    for w in glossary:
+def format_words(words: list[dict[str]]):
+    for w in words:
         if w.get("exp"):
             w["exp"] = w["exp"].replace("<br>", "\n")
-    logging.debug(pprint.pformat(glossary))
-    return [w["word"] for w in glossary]
+    logging.debug(pprint.pformat(words))
+    return [w["word"] for w in words]
 
 
 if __name__ == "__main__":
-    asyncio.run(list_eudic_glossary(page=44))
+    asyncio.run(list_eudic_vocabulary(page=44))

@@ -29,7 +29,7 @@ from config import (
     CHOSEN_WORDS_SIZE,
     sys_message_explanation,
 )
-from eudic import list_eudic_glossary, format_glossary
+from eudic import list_eudic_vocabulary, format_words
 from groq_llm import gen_chat_completion
 from tts import gen_tts_audio
 
@@ -45,17 +45,17 @@ async def daily_message(context: telegram.ext.CallbackContext) -> None:
     loop = asyncio.get_event_loop()
     job = context.job
     logging.info(context.job)
-    # get glossary
-    glossary = await list_eudic_glossary(0, 0)
-    if not glossary:
-        await context.bot.send_message(job.chat_id, f"not glossary")
+    # get vocabulary
+    vocabulary = await list_eudic_vocabulary(0, 0)
+    if not vocabulary:
+        await context.bot.send_message(job.chat_id, f"not words")
         return
 
     # choose words
     k = CHOSEN_WORDS_SIZE
 
-    choice = random.choices(glossary, k=k)
-    words = format_glossary(choice)
+    choice = random.choices(vocabulary, k=k)
+    words = format_words(choice)
     # send words
     try:
         for i, w in enumerate(choice, 1):
@@ -161,7 +161,7 @@ async def send_telegraph(context, job, llm_response):
 
 async def send_audio(context, job, llm_response, words):
     try:
-        audio_filename = f"glossary-{datetime.datetime.now(datetime.UTC)}.mp3"
+        audio_filename = f"vocabulary-{datetime.datetime.now(datetime.UTC)}.mp3"
         await gen_tts_audio(
             text=markdown_to_text(llm_response), filename=audio_filename
         )

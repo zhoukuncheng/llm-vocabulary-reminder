@@ -13,7 +13,7 @@ async def write_to_telegraph(html: str) -> str:
         logging.info(await telegraph.create_account(short_name="anonymous"))
 
     response = await telegraph.create_page(
-        f"Glossary {datetime.datetime.now(datetime.UTC)}",
+        f"vocabulary {datetime.datetime.now(datetime.UTC)}",
         html_content=html,
     )
     logging.info(response)
