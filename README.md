@@ -1,4 +1,6 @@
-# Vocabulary Reminder Bot
+# LLM Vocabulary Reminder Bot
+
+English | [中文介绍](https://zhoukuncheng.github.io/posts/llm-vocabulary-reminder/)  
 
 This project is a Telegram bot designed to provide users with daily reminders containing English vocabulary words,
 definitions, and example sentences. It utilizes various APIs and libraries to generate engaging and informative content
