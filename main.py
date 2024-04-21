@@ -23,7 +23,7 @@ import telegramify_markdown
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from article import write_to_telegraph, markdown_to_text
+from article import write_to_telegraph, markdown_to_text, fetch_markdown_from_url
 from config import (
     ALLOWED_USER_IDS,
     TG_BOT_TOKEN,
@@ -109,7 +109,7 @@ def gen_word_links(i, w, word):
     return l
 
 
-async def send_telegraph(context, chat_id, llm_response, reply_to_message_id=None):
+async def send_telegraph(context, chat_id, text, reply_to_message_id=None):
     try:
         article_url = await write_to_telegraph(
             mistune.create_markdown(
@@ -117,7 +117,7 @@ async def send_telegraph(context, chat_id, llm_response, reply_to_message_id=Non
                 hard_wrap=True,
                 plugins=["strikethrough", "footnotes", "table", "speedup"],
             )(
-                llm_response,
+                text,
             )
         )
         await context.bot.send_message(
@@ -132,7 +132,7 @@ async def send_telegraph(context, chat_id, llm_response, reply_to_message_id=Non
                     hard_wrap=True,
                     plugins=["strikethrough", "footnotes", "table", "speedup"],
                 )(
-                    telegramify_markdown.convert(llm_response),
+                    telegramify_markdown.convert(text),
                 )
             )
             await context.bot.send_message(
@@ -403,6 +403,32 @@ async def delete_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+@allowed_users_only
+async def send_jina_ai_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Processes a user message, extracts words, and attempts to delete them from the Eudic word list.
+    """
+
+    source_url = context.args[0]
+    if not source_url:
+        await update.message.reply_text(f"empty url")
+        return
+    content = await fetch_markdown_from_url(source_url)
+    try:
+        # send telegraph
+        await send_telegraph(
+            context,
+            update.message.chat_id,
+            content,
+            reply_to_message_id=update.message.message_id,
+        )
+    except Exception as e:
+        logging.exception("failed", exc_info=True)
+        await update.message.reply_text(
+            f"Failed to add words. Please try again later. {e}"
+        )
+
+
 def main() -> None:
     """Run bot."""
     # Create the Application and pass it your bot's token.
@@ -414,6 +440,7 @@ def main() -> None:
     application.add_handler(CommandHandler("audio", get_audio_url))
     application.add_handler(CommandHandler("add", add_words))
     application.add_handler(CommandHandler("remove", delete_words))
+    application.add_handler(CommandHandler("jina", send_jina_ai_page))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling(allowed_updates=Update.ALL_TYPES)
