@@ -8,10 +8,12 @@ Simple Bot to send timed Telegram messages.
 """
 import asyncio
 import datetime
+import functools
 import logging
 import os
 import random
 import traceback
+from typing import Callable, Coroutine
 from urllib.parse import quote
 
 import mistune
@@ -29,7 +31,12 @@ from config import (
     CHOSEN_WORDS_SIZE,
     sys_message_explanation,
 )
-from eudic import list_eudic_vocabulary, format_words
+from eudic import (
+    list_eudic_vocabulary,
+    format_words,
+    add_words_to_eudic,
+    delete_words_from_eudic,
+)
 from groq_llm import gen_chat_completion
 from tts import gen_tts_audio
 
@@ -40,57 +47,33 @@ logging.basicConfig(
 )
 
 
-async def daily_message(context: telegram.ext.CallbackContext) -> None:
-    """Send the alarm message."""
-    loop = asyncio.get_event_loop()
-    job = context.job
-    logging.info(context.job)
-    # get vocabulary
-    vocabulary = await list_eudic_vocabulary(0, 0)
-    if not vocabulary:
-        await context.bot.send_message(job.chat_id, f"not words")
-        return
+def allowed_users_only(
+    func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Coroutine]
+) -> Callable:
+    """
+    Decorator that checks if the user is allowed based on their ID.
 
-    # choose words
-    k = CHOSEN_WORDS_SIZE
+    Parameters:
+        func (Callable): The original function to be decorated.
 
-    choice = random.choices(vocabulary, k=k)
-    words = format_words(choice)
-    # send words
-    try:
-        for i, w in enumerate(choice, 1):
-            word = w.get("word", "").strip()
-            l = gen_word_links(i, w, word)
-            msg = await context.bot.send_message(
-                job.chat_id, telegramify_markdown.convert(l), parse_mode="MarkdownV2"
+    Returns:
+        Callable: The wrapped function.
+    """
+
+    @functools.wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.message.from_user.id
+        if user_id not in ALLOWED_USER_IDS:
+            logging.error(f"Access denied for user: {update.message.from_user}")
+            await update.effective_message.reply_text(
+                "You do not have permission to perform this action."
             )
-            if msg:
-                # llm explain
-                llm_explain = await gen_chat_completion(
-                    sys_message_explanation, f'word: "{word}"'
-                )
-                await context.bot.send_message(
-                    job.chat_id,
-                    telegramify_markdown.convert(llm_explain),
-                    parse_mode="MarkdownV2",
-                    reply_to_message_id=msg.message_id,
-                )
-            await asyncio.sleep(5)
+            return
 
-    except Exception as e:
-        logging.exception(e)
-        await context.bot.send_message(
-            job.chat_id, f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}"
-        )
+        # User is allowed, call the original function
+        return await func(update, context)
 
-    # llm generate article
-    llm_response = await gen_chat_completion(sys_message_writer, f"words: \n{words}")
-
-    logging.debug(llm_response)
-    # send telegraph
-    await send_telegraph(context, job, llm_response)
-    # gen audio file
-    await send_audio(context, job, llm_response, words)
+    return wrapper
 
 
 def gen_word_links(i, w, word):
@@ -126,7 +109,7 @@ def gen_word_links(i, w, word):
     return l
 
 
-async def send_telegraph(context, job, llm_response):
+async def send_telegraph(context, chat_id, llm_response, reply_to_message_id=None):
     try:
         article_url = await write_to_telegraph(
             mistune.create_markdown(
@@ -137,7 +120,9 @@ async def send_telegraph(context, job, llm_response):
                 llm_response,
             )
         )
-        await context.bot.send_message(job.chat_id, article_url)
+        await context.bot.send_message(
+            chat_id, article_url, reply_to_message_id=reply_to_message_id
+        )
     except Exception as e:
         logging.exception(e)
         try:
@@ -150,12 +135,14 @@ async def send_telegraph(context, job, llm_response):
                     telegramify_markdown.convert(llm_response),
                 )
             )
-            await context.bot.send_message(job.chat_id, article_url)
+            await context.bot.send_message(
+                chat_id, article_url, reply_to_message_id=reply_to_message_id
+            )
         except Exception as e:
             logging.exception(e)
             await context.bot.send_message(
-                job.chat_id,
-                f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}",
+                chat_id,
+                f"{chat_id} failed!:{e}, {traceback.format_exc()}",
             )
 
 
@@ -176,14 +163,83 @@ async def send_audio(context, job, llm_response, words):
         )
 
 
+def remove_command(text: str) -> str:
+    """
+    Removes a command at the beginning of the text.
+
+    Parameters:
+        text (str): The input text possibly containing a command.
+
+    Returns:
+        str: The text with the command removed, if any.
+    """
+    # Check if the text starts with a '/' and split by space to isolate command
+    if text.startswith("/"):
+        try:
+            _, text_without_command = text.split(" ", 1)
+        except ValueError:
+            # If split fails (no space found), return an empty string since we only have a command
+            return ""
+        return text_without_command
+    return text
+
+
+async def callback_message(context: telegram.ext.CallbackContext) -> None:
+    """Send the alarm message."""
+    job = context.job
+    logging.info(context.job)
+    # get vocabulary
+    vocabulary = await list_eudic_vocabulary(0, 0)
+    if not vocabulary:
+        await context.bot.send_message(job.chat_id, f"not words")
+        return
+
+    # choose words
+    k = CHOSEN_WORDS_SIZE
+
+    choice = random.choices(vocabulary, k=k)
+    words = format_words(choice)
+    # send words
+    try:
+        for i, w in enumerate(choice, 1):
+            word = w.get("word", "").strip()
+            l = gen_word_links(i, w, word)
+            msg = await context.bot.send_message(
+                job.chat_id, telegramify_markdown.convert(l), parse_mode="MarkdownV2"
+            )
+            if msg:
+                # llm explain
+                llm_explain = await gen_chat_completion(
+                    sys_message_explanation, f'word: "{word}"'
+                )
+                await context.bot.send_message(
+                    job.chat_id,
+                    telegramify_markdown.convert(llm_explain),
+                    parse_mode="MarkdownV2",
+                    reply_to_message_id=msg.message_id,
+                )
+            await asyncio.sleep(1)
+
+    except Exception as e:
+        logging.exception(e)
+        await context.bot.send_message(
+            job.chat_id, f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}"
+        )
+
+    # llm generate article
+    llm_response = await gen_chat_completion(sys_message_writer, f"words: \n{words}")
+
+    logging.debug(llm_response)
+    # send telegraph
+    await send_telegraph(context, job.chat_id, llm_response)
+    # gen audio file
+    await send_audio(context, job, llm_response, words)
+
+
+@allowed_users_only
 async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Add a job to the queue."""
-    if update.message.from_user.id not in ALLOWED_USER_IDS:
-        logging.error(f"banned: {update.message.from_user}")
-        await update.effective_message.reply_text(
-            f"not allowed: {update.message.from_user}"
-        )
-        return
+
     try:
         for job in context.job_queue.jobs():
             job.schedule_removal()
@@ -191,7 +247,7 @@ async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logging.error(f"remove all jobs failed: {e}")
     try:
         context.job_queue.run_once(
-            daily_message,
+            callback_message,
             datetime.datetime.now(tz=pytz.timezone("Asia/Shanghai"))
             + datetime.timedelta(seconds=1),
             name="once1",
@@ -201,7 +257,7 @@ async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         times = [(x, random.randint(15, 55)) for x in range(8, 23)]
         for h, m in times:
             context.job_queue.run_daily(
-                daily_message,
+                callback_message,
                 datetime.time(hour=h, minute=m, tzinfo=pytz.timezone("Asia/Shanghai")),
                 name=f"{h}:{m} job",
                 chat_id=update.message.chat_id,
@@ -223,9 +279,13 @@ async def get_audio_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         audio_filename = (
             f"audio-{datetime.datetime.now(datetime.UTC)}-{all_words[:30]}.mp3"
         )
-        await update.effective_message.reply_text(audio_url)
+        await update.effective_message.reply_text(
+            audio_url, reply_to_message_id=update.message.message_id
+        )
         await gen_tts_audio(text=all_words, filename=audio_filename)
-        await update.effective_message.reply_audio(audio=audio_filename)
+        await update.effective_message.reply_audio(
+            audio=audio_filename, reply_to_message_id=update.message.message_id
+        )
         os.remove(audio_filename)
     except (IndexError, ValueError) as e:
         logging.exception(e)
@@ -242,13 +302,104 @@ async def get_web_definition_url(update: Update, context: ContextTypes.DEFAULT_T
     try:
         word = " ".join(context.args).strip()
         page_urls = gen_word_links(0, {}, word)
-        await update.effective_message.reply_text(
-            telegramify_markdown.convert(page_urls), parse_mode="MarkdownV2"
+        msg = await update.effective_message.reply_text(
+            telegramify_markdown.convert(page_urls),
+            parse_mode="MarkdownV2",
+            reply_to_message_id=update.message.message_id,
         )
     except (IndexError, ValueError) as e:
         logging.error(e)
         await update.effective_message.reply_text(
             "Please use the /page command followed by a word."
+        )
+    else:
+        # llm explain
+        llm_explain = await gen_chat_completion(
+            sys_message_explanation, f'word: "{word}"'
+        )
+        await update.effective_message.reply_text(
+            telegramify_markdown.convert(llm_explain),
+            parse_mode="MarkdownV2",
+            reply_to_message_id=msg.message_id,
+        )
+
+
+@allowed_users_only
+async def add_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Get word list from user message
+    user_message = remove_command(update.message.text)
+    if not user_message:
+        await update.message.reply_text("Please provide a list of words to add.")
+        return
+
+    # Parsing the input to extract words
+    words = [
+        word.strip()
+        for word in user_message.replace("\n", ",").split(",")
+        if word.strip()
+    ]
+
+    # Prepare the request payload
+    payload = {"id": "0", "language": "en", "words": words}
+
+    try:
+        response_json = await add_words_to_eudic(payload)
+        message = response_json.get("message", "Words added successfully!")
+        await update.message.reply_text(
+            message, reply_to_message_id=update.message.message_id
+        )
+    except Exception as e:
+        logging.error(f"An error occurred: {str(e)}")
+        await update.message.reply_text(
+            f"Failed to add words. Please try again later. {e}"
+        )
+    else:
+        # llm explain
+        llm_explain = await gen_chat_completion(
+            sys_message_explanation, f'explain all these words: "{words}"'
+        )
+        await send_telegraph(
+            context,
+            update.message.chat_id,
+            llm_explain,
+            reply_to_message_id=update.message.message_id,
+        )
+
+
+@allowed_users_only
+async def delete_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Processes a user message, extracts words, and attempts to delete them from the Eudic word list.
+    """
+
+    user_message = remove_command(update.message.text)
+    if not user_message:
+        await update.message.reply_text("Please provide a list of words to delete.")
+        return
+
+    words = [
+        word.strip()
+        for word in user_message.replace("\n", ",").split(",")
+        if word.strip()
+    ]
+
+    payload = {"id": "0", "language": "en", "words": words}
+    try:
+        success = await delete_words_from_eudic(payload)
+        if success:
+            await update.message.reply_text(
+                "Words deleted successfully!",
+                reply_to_message_id=update.message.message_id,
+            )
+        else:
+            logging.error(f"An error occurred")
+            await update.message.reply_text(
+                "Failed to delete words. Please try again later."
+            )
+    except Exception as e:
+        logging.error(f"An error occurred: {str(e)}")
+        await update.message.reply_text(
+            f"Failed to add words. Please try again later. {e}"
         )
 
 
@@ -259,8 +410,10 @@ def main() -> None:
 
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("set", set_timer))
-    application.add_handler(CommandHandler("page", get_web_definition_url))
+    application.add_handler(CommandHandler("define", get_web_definition_url))
     application.add_handler(CommandHandler("audio", get_audio_url))
+    application.add_handler(CommandHandler("add", add_words))
+    application.add_handler(CommandHandler("remove", delete_words))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling(allowed_updates=Update.ALL_TYPES)
