@@ -184,6 +184,43 @@ def remove_command(text: str) -> str:
     return text
 
 
+def get_random_subarray_weighted(words: list, subarray_size: int = 15) -> list:
+    """
+    Selects a random subarray of continuous words of a specified size from a larger
+    list of words, with a bias towards the last third of the list.
+
+    Parameters:
+    words (list): The list of words from which to select the subarray.
+    subarray_size (int): The size of the subarray to select.
+
+    Returns:
+    list: A subarray of words of the specified size.
+    """
+    if subarray_size > len(words):
+        raise ValueError("Subarray size cannot be greater than the list size.")
+
+    # Calculate the starting index of the last third of the list
+    last_third_start_index = len(words) * 2 // 3
+
+    # Decide whether to bias towards the last third or choose from the entire list
+    # Let's say we want to bias 70% of the time towards the last third
+    if random.random() < 0.7:
+        # If biased towards the last third, adjust the start index range accordingly
+        if subarray_size <= len(words) - last_third_start_index:
+            start_index = random.randint(
+                last_third_start_index, len(words) - subarray_size
+            )
+        else:
+            # In case the subarray size is larger than the last third, select from the whole list
+            start_index = random.randint(0, len(words) - subarray_size)
+    else:
+        # If not biased, select from the entire list
+        start_index = random.randint(0, len(words) - subarray_size)
+
+    # Extract and return the subarray.
+    return words[start_index : start_index + subarray_size]
+
+
 async def callback_message(context: telegram.ext.CallbackContext) -> None:
     """Send the alarm message."""
     job = context.job
@@ -197,7 +234,7 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
     # choose words
     k = CHOSEN_WORDS_SIZE
 
-    choice = random.choices(vocabulary, k=k)
+    choice = get_random_subarray_weighted(vocabulary, k)
     words = format_words(choice)
     # send words
     try:
