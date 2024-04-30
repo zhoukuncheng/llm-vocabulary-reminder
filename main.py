@@ -48,7 +48,7 @@ logging.basicConfig(
 
 
 def allowed_users_only(
-    func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Coroutine]
+        func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Coroutine]
 ) -> Callable:
     """
     Decorator that checks if the user is allowed based on their ID.
@@ -197,7 +197,7 @@ def get_random_subarray_weighted(words: list, subarray_size: int = 15) -> list:
     list: A subarray of words of the specified size.
     """
     if subarray_size > len(words):
-        raise ValueError("Subarray size cannot be greater than the list size.")
+        return words
 
     # Calculate the starting index of the last third of the list
     last_third_start_index = len(words) * 2 // 3
@@ -216,9 +216,9 @@ def get_random_subarray_weighted(words: list, subarray_size: int = 15) -> list:
     else:
         # If not biased, select from the entire list
         start_index = random.randint(0, len(words) - subarray_size)
-
+    logging.info(f"{len(words)=}, {subarray_size=}, {start_index=}, {start_index + subarray_size=}")
     # Extract and return the subarray.
-    return words[start_index : start_index + subarray_size]
+    return words[start_index: start_index + subarray_size]
 
 
 async def callback_message(context: telegram.ext.CallbackContext) -> None:

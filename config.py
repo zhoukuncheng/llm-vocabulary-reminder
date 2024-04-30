@@ -105,5 +105,5 @@ CHOSEN_WORDS_SIZE = int(os.getenv("WORDS_SIZE", "15"))
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GROQ_MODEL_NAME = os.environ.get("GROQ_MODEL_NAME", "llama3-70b-8192")
-GROQ_TEMPERATURE = os.environ.get("GROQ_TEMPERATURE", 0.2)
-GROQ_TOP_P = os.environ.get("GROQ_TOP_P", 0.8)
+GROQ_TEMPERATURE = float(os.environ.get("GROQ_TEMPERATURE", "0.2"))
+GROQ_TOP_P = float(os.environ.get("GROQ_TOP_P", "0.6"))
