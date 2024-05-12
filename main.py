@@ -38,6 +38,7 @@ from eudic import (
     delete_words_from_eudic,
 )
 from groq_llm import gen_chat_completion
+from mdict import query_text_from_mdx
 from tts import gen_tts_audio
 
 # Enable logging
@@ -216,7 +217,9 @@ def get_random_subarray_weighted(words: list, subarray_size: int = 15) -> list:
     else:
         # If not biased, select from the entire list
         start_index = random.randint(0, len(words) - subarray_size)
-    logging.info(f"{len(words)=}, {subarray_size=}, {start_index=}, {start_index + subarray_size=}")
+    logging.info(
+        f"{len(words)=}, {subarray_size=}, {start_index=}, {start_index + subarray_size=}"
+    )
     # Extract and return the subarray.
     return words[start_index: start_index + subarray_size]
 
@@ -245,9 +248,12 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
                 job.chat_id, telegramify_markdown.convert(l), parse_mode="MarkdownV2"
             )
             if msg:
+                # query mdict
+                original_exp = query_text_from_mdx(word)
                 # llm explain
                 llm_explain = await gen_chat_completion(
-                    sys_message_explanation, f'word: "{word}"'
+                    sys_message_explanation,
+                    f'word: "{word}", original explanation: \n```{original_exp}```',
                 )
                 await context.bot.send_message(
                     job.chat_id,
@@ -255,7 +261,7 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
                     parse_mode="MarkdownV2",
                     reply_to_message_id=msg.message_id,
                 )
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
 
     except Exception as e:
         logging.exception(e)
@@ -351,8 +357,10 @@ async def get_web_definition_url(update: Update, context: ContextTypes.DEFAULT_T
         )
     else:
         # llm explain
+        original_exp = query_text_from_mdx(word)
         llm_explain = await gen_chat_completion(
-            sys_message_explanation, f'word: "{word}"'
+            sys_message_explanation,
+            f'word: "{word}, original explanation: \n```{original_exp}```"',
         )
         await update.effective_message.reply_text(
             telegramify_markdown.convert(llm_explain),
@@ -466,6 +474,19 @@ async def send_jina_ai_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def query_mdict(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        word = " ".join(context.args).strip()
+        if not word:
+            await update.message.reply_text("Please provide a word to query.")
+            return
+        definition = query_text_from_mdx(word)
+        await update.message.reply_text(definition, reply_to_message_id=update.message.message_id)
+    except Exception as e:
+        logging.exception("failed", exc_info=True)
+        await update.message.reply_text(f"Failed to query mdict. {e}")
+
+
 def main() -> None:
     """Run bot."""
     # Create the Application and pass it your bot's token.
@@ -478,6 +499,7 @@ def main() -> None:
     application.add_handler(CommandHandler("add", add_words))
     application.add_handler(CommandHandler("remove", delete_words))
     application.add_handler(CommandHandler("jina", send_jina_ai_page))
+    application.add_handler(CommandHandler("mdict", query_mdict))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling(allowed_updates=Update.ALL_TYPES)

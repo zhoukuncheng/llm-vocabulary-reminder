@@ -17,7 +17,10 @@ client = AsyncGroq(
 
 
 async def gen_chat_completion(sys_prompt: str, prompt: str) -> str:
-    logging.debug(f"temperature: {GROQ_TEMPERATURE}, top_p: {GROQ_TOP_P}, model: {GROQ_MODEL_NAME}")
+    logging.debug(
+        f"temperature: {GROQ_TEMPERATURE}, top_p: {GROQ_TOP_P}, model: {GROQ_MODEL_NAME}"
+    )
+    logging.debug(f"user message prompt: {prompt}")
     chat_completion = await client.chat.completions.create(
         temperature=GROQ_TEMPERATURE,
         top_p=GROQ_TOP_P,
