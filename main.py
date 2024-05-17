@@ -49,7 +49,7 @@ logging.basicConfig(
 
 
 def allowed_users_only(
-        func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Coroutine]
+    func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Coroutine]
 ) -> Callable:
     """
     Decorator that checks if the user is allowed based on their ID.
@@ -221,7 +221,7 @@ def get_random_subarray_weighted(words: list, subarray_size: int = 15) -> list:
         f"{len(words)=}, {subarray_size=}, {start_index=}, {start_index + subarray_size=}"
     )
     # Extract and return the subarray.
-    return words[start_index: start_index + subarray_size]
+    return words[start_index : start_index + subarray_size]
 
 
 async def callback_message(context: telegram.ext.CallbackContext) -> None:
@@ -261,7 +261,7 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
                     parse_mode="MarkdownV2",
                     reply_to_message_id=msg.message_id,
                 )
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
 
     except Exception as e:
         logging.exception(e)
@@ -481,7 +481,9 @@ async def query_mdict(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Please provide a word to query.")
             return
         definition = query_text_from_mdx(word)
-        await update.message.reply_text(definition, reply_to_message_id=update.message.message_id)
+        await update.message.reply_text(
+            definition, reply_to_message_id=update.message.message_id
+        )
     except Exception as e:
         logging.exception("failed", exc_info=True)
         await update.message.reply_text(f"Failed to query mdict. {e}")
