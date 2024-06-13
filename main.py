@@ -82,6 +82,8 @@ def gen_word_links(i, w, word):
 **{i}. {word}**
 {w.get("exp", "")}
 
+{query_text_from_mdx(word)}
+
 [🇺🇸 MAmE](https://dict.youdao.com/dictvoice?audio={quote(word)}&type=2)
 
 [🇬🇧  BrE](https://dict.youdao.com/dictvoice?audio={quote(word)}&type=1)
@@ -261,7 +263,7 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
                     parse_mode="MarkdownV2",
                     reply_to_message_id=msg.message_id,
                 )
-            await asyncio.sleep(3)
+            await asyncio.sleep(6)
 
     except Exception as e:
         logging.exception(e)
