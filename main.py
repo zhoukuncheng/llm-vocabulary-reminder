@@ -491,6 +491,30 @@ async def query_mdict(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Failed to query mdict. {e}")
 
 
+@allowed_users_only
+async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Get word list from user message
+    user_message = remove_command(update.message.text)
+    if not user_message:
+        await update.message.reply_text("Please provide input to chat with.")
+        return
+
+    try:
+        # llm explain
+        llm_explain = await gen_chat_completion(
+            "You are a helpful assistant. ", f'Answer the question: "{user_message}"'
+        )
+        await send_telegraph(
+            context,
+            update.message.chat_id,
+            llm_explain,
+            reply_to_message_id=update.message.message_id,
+        )
+    except Exception as e:
+        logging.exception("failed", exc_info=True)
+        await update.message.reply_text(f"Failed to chat. {e}")
+
+
 def main() -> None:
     """Run bot."""
     # Create the Application and pass it your bot's token.
@@ -504,6 +528,7 @@ def main() -> None:
     application.add_handler(CommandHandler("remove", delete_words))
     application.add_handler(CommandHandler("jina", send_jina_ai_page))
     application.add_handler(CommandHandler("mdict", query_mdict))
+    application.add_handler(CommandHandler("chat", chat))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling(allowed_updates=Update.ALL_TYPES)
