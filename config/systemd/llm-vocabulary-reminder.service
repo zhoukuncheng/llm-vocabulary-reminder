@@ -1,0 +1,18 @@
+[Unit]
+Description=LLM Vocabulary Reminder
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/projects/llm-vocabulary-reminder
+ExecStart=/root/projects/llm-vocabulary-reminder/venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+Environment=TG_BOT_TOKEN=
+Environment=TG_IDS=
+Environment=EUDIC_TOKEN=
+Environment=GROQ_API_KEY=
+
+[Install]
+WantedBy=multi-user.target
