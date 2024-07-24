@@ -263,7 +263,7 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
                     parse_mode="MarkdownV2",
                     reply_to_message_id=msg.message_id,
                 )
-            await asyncio.sleep(6)
+            await asyncio.sleep(10)
 
     except Exception as e:
         logging.exception(e)
@@ -299,7 +299,7 @@ async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             chat_id=update.message.chat_id,
         )
 
-        times = [(x, random.randint(15, 55)) for x in range(8, 23)]
+        times = [(x, random.randint(15, 55)) for x in range(9, 22)]
         for h, m in times:
             context.job_queue.run_daily(
                 callback_message,
