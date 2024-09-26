@@ -248,10 +248,9 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
             try:
                 word = w.get("word", "").strip()
                 l = gen_word_links(i, w, word)
-                l = re.sub(r"\n+", "\n", l)
                 msg = await context.bot.send_message(
                     job.chat_id,
-                    telegramify_markdown.convert(l),
+                    re.sub(r"\n+", "\n", telegramify_markdown.convert(l)),
                     parse_mode="MarkdownV2",
                 )
                 if msg:
