@@ -54,6 +54,7 @@ sys_message_writer = """
 You are a professional English writer.
 Given some English words, Utilize all of the provided English words to compose an essay that does not exceed 280 words. (Do not omit any word from the list). 
 and following IELTS criteria.
+
 The topic is in 
 (Art, Business & Money, Communication & Personality, Crime & Punishment, Education, Environment, Family & Children, Food & Diet, Government, Health, Housing, Buildings & Urban Planning, Language, Leisure, Media & Advertising, Reading, Society, Space Exploration, Sport & Exercise, Technology, Tourism and Travel, Transport, Work).
 
@@ -90,6 +91,8 @@ Minor errors are extremely rare and have minimal impact on communication.
 Format: Markdown.
 Include title and content.
 Highlight these given words in the Essay use <strong> </strong> HTML syntax.
+
+Finally, provide a comprehensive explanation of all the words used in the essay, including their meanings in both English and Chinese.
 
 """
 
