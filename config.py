@@ -104,6 +104,6 @@ VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-AvaMultilingualNeural")
 CHOSEN_WORDS_SIZE = int(os.getenv("WORDS_SIZE", "10"))
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-GROQ_MODEL_NAME = os.environ.get("GROQ_MODEL_NAME", "llama-3.1-70b-versatile")
+GROQ_MODEL_NAME = os.environ.get("GROQ_MODEL_NAME", "llama-3.2-90b-text-preview")
 GROQ_TEMPERATURE = float(os.environ.get("GROQ_TEMPERATURE", "0.2"))
 GROQ_TOP_P = float(os.environ.get("GROQ_TOP_P", "0.6"))

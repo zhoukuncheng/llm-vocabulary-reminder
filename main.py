@@ -12,6 +12,7 @@ import functools
 import logging
 import os
 import random
+import re
 import traceback
 from typing import Callable, Coroutine
 from urllib.parse import quote
@@ -244,25 +245,36 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
     # send words
     try:
         for i, w in enumerate(choice, 1):
-            word = w.get("word", "").strip()
-            l = gen_word_links(i, w, word)
-            msg = await context.bot.send_message(
-                job.chat_id, telegramify_markdown.convert(l), parse_mode="MarkdownV2"
-            )
-            if msg:
-                # query mdict
-                original_exp = query_text_from_mdx(word)
-                # llm explain
-                llm_explain = await gen_chat_completion(
-                    sys_message_explanation,
-                    f'word: "{word}", original explanation: \n```{original_exp}```',
+            try:
+                word = w.get("word", "").strip()
+                l = gen_word_links(i, w, word)
+                l = re.sub(r"\n+", "\n", l)
+                msg = await context.bot.send_message(
+                    job.chat_id,
+                    telegramify_markdown.convert(l),
+                    parse_mode="MarkdownV2",
                 )
+                if msg:
+                    # query mdict
+                    original_exp = query_text_from_mdx(word)
+                    # llm explain
+                    llm_explain = await gen_chat_completion(
+                        sys_message_explanation,
+                        f'word: "{word}", original explanation: \n```{original_exp}```',
+                    )
+                    await context.bot.send_message(
+                        job.chat_id,
+                        telegramify_markdown.convert(llm_explain),
+                        parse_mode="MarkdownV2",
+                        reply_to_message_id=msg.message_id,
+                    )
+            except Exception as e:
+                logging.exception(e)
                 await context.bot.send_message(
                     job.chat_id,
-                    telegramify_markdown.convert(llm_explain),
-                    parse_mode="MarkdownV2",
-                    reply_to_message_id=msg.message_id,
+                    f"explain {w} failed!:{e}, {traceback.format_exc()}",
                 )
+                return
             await asyncio.sleep(10)
 
     except Exception as e:
