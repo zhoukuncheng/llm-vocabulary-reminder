@@ -92,7 +92,7 @@ Format: Markdown.
 Include title and content.
 Highlight these given words in the Essay use <strong> </strong> HTML syntax.
 
-Finally, provide a comprehensive explanation of all the words used in the essay, including their meanings in both English and Chinese.
+Finally, provide a comprehensive explanation of all the words used in the essay, including their meanings in both English and Chinese (简体中文解释).
 
 """
 
