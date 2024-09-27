@@ -51,7 +51,7 @@ logging.basicConfig(
 
 
 def allowed_users_only(
-    func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Coroutine]
+        func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Coroutine]
 ) -> Callable:
     """
     Decorator that checks if the user is allowed based on their ID.
@@ -225,7 +225,7 @@ def get_random_subarray_weighted(words: list, subarray_size: int = 15) -> list:
         f"{len(words)=}, {subarray_size=}, {start_index=}, {start_index + subarray_size=}"
     )
     # Extract and return the subarray.
-    return words[start_index : start_index + subarray_size]
+    return words[start_index: start_index + subarray_size]
 
 
 async def callback_message(context: telegram.ext.CallbackContext) -> None:
@@ -251,7 +251,7 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
                 l = gen_word_links(i, w, word)
                 msg = await context.bot.send_message(
                     job.chat_id,
-                    re.sub(r"\n+", "\n", telegramify_markdown.convert(l)),
+                    re.sub(r"\n+", "\n", telegramify_markdown.convert(l))[:4096],
                     parse_mode="MarkdownV2",
                 )
 
@@ -276,7 +276,7 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
                     job.chat_id,
                     f"explain {w} failed!:{e}, {traceback.format_exc()}",
                 )
-                return
+                continue
 
         # llm generate article
         llm_response = await gen_chat_completion(
