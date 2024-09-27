@@ -31,6 +31,7 @@ from config import (
     sys_message_writer,
     CHOSEN_WORDS_SIZE,
     sys_message_explanation,
+    MESSAGE_SEND_INTERVAL,
 )
 from eudic import (
     list_eudic_vocabulary,
@@ -253,20 +254,22 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
                     re.sub(r"\n+", "\n", telegramify_markdown.convert(l)),
                     parse_mode="MarkdownV2",
                 )
-                if msg:
-                    # query mdict
-                    original_exp = query_text_from_mdx(word)
-                    # llm explain
-                    llm_explain = await gen_chat_completion(
-                        sys_message_explanation,
-                        f'word: "{word}", original explanation: \n```{original_exp}```',
-                    )
-                    await context.bot.send_message(
-                        job.chat_id,
-                        telegramify_markdown.convert(llm_explain),
-                        parse_mode="MarkdownV2",
-                        reply_to_message_id=msg.message_id,
-                    )
+
+                # query mdict
+                original_exp = query_text_from_mdx(word)
+                # llm explain
+                llm_explain = await gen_chat_completion(
+                    sys_message_explanation,
+                    f'word: "{word}", original explanation: \n```{original_exp}```',
+                )
+                await context.bot.send_message(
+                    job.chat_id,
+                    telegramify_markdown.convert(llm_explain),
+                    parse_mode="MarkdownV2",
+                    reply_to_message_id=msg.message_id,
+                )
+                await asyncio.sleep(MESSAGE_SEND_INTERVAL)
+
             except Exception as e:
                 logging.exception(e)
                 await context.bot.send_message(
@@ -274,22 +277,23 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
                     f"explain {w} failed!:{e}, {traceback.format_exc()}",
                 )
                 return
-            await asyncio.sleep(10)
+
+        # llm generate article
+        llm_response = await gen_chat_completion(
+            sys_message_writer, f"words: \n{words}"
+        )
+
+        logging.debug(llm_response)
+        # send telegraph
+        await send_telegraph(context, job.chat_id, llm_response)
+        # gen audio file
+        await send_audio(context, job, llm_response, words)
 
     except Exception as e:
         logging.exception(e)
         await context.bot.send_message(
             job.chat_id, f"{job.name} {job.data} failed!:{e}, {traceback.format_exc()}"
         )
-
-    # llm generate article
-    llm_response = await gen_chat_completion(sys_message_writer, f"words: \n{words}")
-
-    logging.debug(llm_response)
-    # send telegraph
-    await send_telegraph(context, job.chat_id, llm_response)
-    # gen audio file
-    await send_audio(context, job, llm_response, words)
 
 
 @allowed_users_only
