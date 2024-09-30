@@ -21,8 +21,8 @@ import mistune
 import pytz
 import telegram
 import telegramify_markdown
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
 from article import write_to_telegraph, markdown_to_text, fetch_markdown_from_url
 from config import (
@@ -51,7 +51,7 @@ logging.basicConfig(
 
 
 def allowed_users_only(
-        func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Coroutine]
+    func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Coroutine]
 ) -> Callable:
     """
     Decorator that checks if the user is allowed based on their ID.
@@ -225,7 +225,20 @@ def get_random_subarray_weighted(words: list, subarray_size: int = 15) -> list:
         f"{len(words)=}, {subarray_size=}, {start_index=}, {start_index + subarray_size=}"
     )
     # Extract and return the subarray.
-    return words[start_index: start_index + subarray_size]
+    return words[start_index : start_index + subarray_size]
+
+
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    # 获取按钮携带的动态数据
+    dynamic_text = query.data
+    payload = {"id": "0", "language": "en", "words": [dynamic_text]}
+    success = await delete_words_from_eudic(payload)
+    # 向用户发送包含动态数据的消息
+    if success:
+        await query.answer(f"Deleted : {dynamic_text}")
+    else:
+        await query.answer(f"Delete failed : {dynamic_text}")
 
 
 async def callback_message(context: telegram.ext.CallbackContext) -> None:
@@ -262,11 +275,18 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
                     sys_message_explanation,
                     f'word: "{word}", original explanation: \n```{original_exp}```',
                 )
+
+                # inline button
+                # 创建 InlineKeyboardButton 并设置回调数据
+                button = InlineKeyboardButton(text=f"Delete {word}", callback_data=word)
+                keyboard = InlineKeyboardMarkup([[button]])
+
                 await context.bot.send_message(
                     job.chat_id,
                     telegramify_markdown.convert(llm_explain),
                     parse_mode="MarkdownV2",
                     reply_to_message_id=msg.message_id,
+                    reply_markup=keyboard,
                 )
                 await asyncio.sleep(MESSAGE_SEND_INTERVAL)
 
@@ -544,6 +564,7 @@ def main() -> None:
     application.add_handler(CommandHandler("jina", send_jina_ai_page))
     application.add_handler(CommandHandler("mdict", query_mdict))
     application.add_handler(CommandHandler("chat", chat))
+    application.add_handler(CallbackQueryHandler(button))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling(allowed_updates=Update.ALL_TYPES)
