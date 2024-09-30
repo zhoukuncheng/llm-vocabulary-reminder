@@ -37,7 +37,7 @@ async def add_words_to_eudic(payload: dict) -> dict:
         raise  # Rethrowing the exception for the caller to handle
 
 
-async def delete_words_from_eudic(payload: dict) -> bool:
+async def remove_words_from_eudic(payload: dict) -> bool:
     """
     Asynchronously deletes words from the Eudic word list via a DELETE request.
 

@@ -37,7 +37,7 @@ from eudic import (
     list_eudic_vocabulary,
     format_words,
     add_words_to_eudic,
-    delete_words_from_eudic,
+    remove_words_from_eudic,
 )
 from groq_llm import gen_chat_completion
 from mdict import query_text_from_mdx
@@ -235,7 +235,7 @@ async def remove_word_button(
     # 获取按钮携带的动态数据
     dynamic_text = query.data
     payload = {"id": "0", "language": "en", "words": [dynamic_text]}
-    success = await delete_words_from_eudic(payload)
+    success = await remove_words_from_eudic(payload)
     # 向用户发送包含动态数据的消息
     if success:
         await query.answer(f"Removed : {dynamic_text}")
@@ -280,7 +280,9 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
 
                 # inline button
                 # 创建 InlineKeyboardButton 并设置回调数据
-                button = InlineKeyboardButton(text=f"Delete {word}", callback_data=word)
+                button = InlineKeyboardButton(
+                    text=f"Remove {word}", callback_data=word
+                )
                 keyboard = InlineKeyboardMarkup([[button]])
 
                 await context.bot.send_message(
@@ -451,14 +453,14 @@ async def add_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @allowed_users_only
-async def delete_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def remove_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Processes a user message, extracts words, and attempts to delete them from the Eudic word list.
+    Processes a user message, extracts words, and attempts to remove them from the Eudic word list.
     """
 
     user_message = remove_command(update.message.text)
     if not user_message:
-        await update.message.reply_text("Please provide a list of words to delete.")
+        await update.message.reply_text("Please provide a list of words to remove.")
         return
 
     words = [
@@ -469,16 +471,16 @@ async def delete_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     payload = {"id": "0", "language": "en", "words": words}
     try:
-        success = await delete_words_from_eudic(payload)
+        success = await remove_words_from_eudic(payload)
         if success:
             await update.message.reply_text(
-                "Words deleted successfully!",
+                "Words removed successfully!",
                 reply_to_message_id=update.message.message_id,
             )
         else:
             logging.error(f"An error occurred")
             await update.message.reply_text(
-                "Failed to delete words. Please try again later."
+                "Failed to remove words. Please try again later."
             )
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
@@ -489,10 +491,6 @@ async def delete_words(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @allowed_users_only
 async def send_jina_ai_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Processes a user message, extracts words, and attempts to delete them from the Eudic word list.
-    """
-
     source_url = context.args[0]
     if not source_url:
         await update.message.reply_text(f"empty url")
@@ -562,7 +560,7 @@ def main() -> None:
     application.add_handler(CommandHandler("define", get_web_definition_url))
     application.add_handler(CommandHandler("audio", get_audio_url))
     application.add_handler(CommandHandler("add", add_words))
-    application.add_handler(CommandHandler("remove", delete_words))
+    application.add_handler(CommandHandler("remove", remove_words))
     application.add_handler(CommandHandler("jina", send_jina_ai_page))
     application.add_handler(CommandHandler("mdict", query_mdict))
     application.add_handler(CommandHandler("chat", chat))
