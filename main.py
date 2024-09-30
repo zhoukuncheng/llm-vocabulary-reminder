@@ -228,7 +228,9 @@ def get_random_subarray_weighted(words: list, subarray_size: int = 15) -> list:
     return words[start_index : start_index + subarray_size]
 
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def remove_word_button(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     query = update.callback_query
     # 获取按钮携带的动态数据
     dynamic_text = query.data
@@ -236,9 +238,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     success = await delete_words_from_eudic(payload)
     # 向用户发送包含动态数据的消息
     if success:
-        await query.answer(f"Deleted : {dynamic_text}")
+        await query.answer(f"Removed : {dynamic_text}")
     else:
-        await query.answer(f"Delete failed : {dynamic_text}")
+        await query.answer(f"Removed failed : {dynamic_text}")
 
 
 async def callback_message(context: telegram.ext.CallbackContext) -> None:
@@ -564,7 +566,7 @@ def main() -> None:
     application.add_handler(CommandHandler("jina", send_jina_ai_page))
     application.add_handler(CommandHandler("mdict", query_mdict))
     application.add_handler(CommandHandler("chat", chat))
-    application.add_handler(CallbackQueryHandler(button))
+    application.add_handler(CallbackQueryHandler(remove_word_button))
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling(allowed_updates=Update.ALL_TYPES)
