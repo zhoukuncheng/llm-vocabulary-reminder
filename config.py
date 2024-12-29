@@ -106,7 +106,7 @@ VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-AvaMultilingualNeural")
 
 CHOSEN_WORDS_SIZE = int(os.getenv("WORDS_SIZE", "10"))
 
-MESSAGE_SEND_INTERVAL = int(os.getenv("MESSAGE_SEND_INTERVAL", "15"))
+MESSAGE_SEND_INTERVAL = int(os.getenv("MESSAGE_SEND_INTERVAL", "25"))
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GROQ_MODEL_NAME = os.environ.get("GROQ_MODEL_NAME", "llama-3.2-90b-text-preview")

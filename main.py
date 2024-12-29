@@ -280,9 +280,7 @@ async def callback_message(context: telegram.ext.CallbackContext) -> None:
 
                 # inline button
                 # 创建 InlineKeyboardButton 并设置回调数据
-                button = InlineKeyboardButton(
-                    text=f"Remove {word}", callback_data=word
-                )
+                button = InlineKeyboardButton(text=f"Remove {word}", callback_data=word)
                 keyboard = InlineKeyboardMarkup([[button]])
 
                 await context.bot.send_message(
@@ -338,7 +336,7 @@ async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             chat_id=update.message.chat_id,
         )
 
-        times = [(x, random.randint(15, 55)) for x in range(9, 22)]
+        times = [(x, random.randint(15, 55)) for x in [8, 9, 12, 19, 20, 21]]
         for h, m in times:
             context.job_queue.run_daily(
                 callback_message,
