@@ -11,3 +11,4 @@ groq
 edge-tts
 markdown2
 git+https://github.com/zhoukuncheng/mdict-query.git
+openai

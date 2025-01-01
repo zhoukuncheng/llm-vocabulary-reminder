@@ -112,3 +112,12 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GROQ_MODEL_NAME = os.environ.get("GROQ_MODEL_NAME", "llama-3.2-90b-text-preview")
 GROQ_TEMPERATURE = float(os.environ.get("GROQ_TEMPERATURE", "0.2"))
 GROQ_TOP_P = float(os.environ.get("GROQ_TOP_P", "0.6"))
+
+OAI_API_KEY = os.environ.get("OAI_API_KEY")
+OAI_BASE_URL = os.environ.get(
+    "OAI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/"
+)
+OAI_TEMPERATURE = float(os.environ.get("OAI_TEMPERATURE", "1.0"))
+OAI_TOP_P = float(os.environ.get("OAI_TOP_P", "0.95"))
+OAI_MODEL_NAME = os.environ.get("OAI_MODEL_NAME", "gemini-2.0-flash-exp")
+OAI_MAX_TOKENS = int(os.environ.get("OAI_MAX_TOKENS", "8192"))
