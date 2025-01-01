@@ -39,7 +39,7 @@ from eudic import (
     add_words_to_eudic,
     remove_words_from_eudic,
 )
-from groq_llm import gen_chat_completion
+from llm_client import gen_chat_completion
 from mdict import query_text_from_mdx
 from tts import gen_tts_audio
 
